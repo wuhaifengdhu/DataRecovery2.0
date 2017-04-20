@@ -8,8 +8,7 @@ class PatternHelper(object):
     # Return common prefix if exist else ''
     @staticmethod
     def find_pre_common_str(str1, str2):
-        # str1 = unicode(str1)
-        # str2 = unicode(str2)
+        str1, str2 = PatternHelper.convert_to_str(str1, str2)
         for i in range(min(len(str1), len(str2))):
             if str1[i] != str2[i]:
                 return str1[: i]
@@ -18,6 +17,7 @@ class PatternHelper(object):
     # Return common suffix if exist else ''
     @staticmethod
     def find_end_common_str(str1, str2):
+        str1, str2 = PatternHelper.convert_to_str(str1, str2)
         return PatternHelper.find_pre_common_str(str1[::-1], str2[::-1])[::-1]
 
     # 大pattern,找出对每列来说所有数据都符合的pattern, 数据中第一个单词：若为数字，找出数字的N+长度，若为单词，S+数字长度
@@ -43,6 +43,10 @@ class PatternHelper(object):
         except (TypeError, ValueError):
             pass
         return False
+
+    @staticmethod
+    def convert_to_str(str1, str2):
+        return unicode(str1), unicode(str2)
 
 
 if __name__ == '__main__':

@@ -4,13 +4,13 @@ import pandas as pd
 import xlwt as excel
 import unicodedata
 
+
 class ExcelHelper(object):
     @staticmethod
     def read_excel(excel_file):
         excel_data = pd.read_excel(excel_file)
         excel_data.fillna('', inplace=True)
         return excel_data.columns.tolist(), excel_data.values
-
 
     @staticmethod
     def write_excel(excel_file, data_array, sheet_name="data", header=None):
@@ -31,8 +31,6 @@ class ExcelHelper(object):
                 sheet.write(i + 1, j, unicode(data_array[i][j]))
 
         book.save(excel_file)
-
-
 
     @staticmethod
     def change_unicode_to_str(self, item):

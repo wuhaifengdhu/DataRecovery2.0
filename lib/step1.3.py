@@ -4,6 +4,7 @@ from segment_helper import SegmentHelper
 from excel_helper import ExcelHelper
 from pattern_helper import PatternHelper
 from dict_helper import DictHelper
+import copy
 import time
 from pattern_correlation_helper import PatternCorrelationHelper
 
@@ -18,233 +19,117 @@ class Step1(object):
         self.row_number_training, self.column_number_training = self.train_data.shape
         self.row_number_test, self.column_number_test = self.test_data.shape
         self.segment = SegmentHelper(self.excel_name_training, self.dict_file)  # generate dictionary for training data
-        self.pattern_list = []
-        self.test_str_list = []
-        self.AB_to_C = {}
-        self.AC_to_B = {}
-        self.BC_to_A = {}
-
-    def _big_pattern(self, data_list):
-        big_pattern = {}
-        for item in data_list:
-            _pattern = PatternHelper.find_first_word_length(item)
-            if _pattern is not None:
-                DictHelper.increase_dic_key(big_pattern, _pattern)
-        min_key = min(big_pattern.keys())
-        max_key = max(big_pattern.keys())
-        if min_key[0] != max_key[0]:
-            return None
-        else:
-            return [min_key, max_key]
-
-
-
-
-    # find the big pattern that suits each item in the column, I choose the length of the first word
-    def find_big_pattern(self):
-        for i in range(self.column_number_training):
-            self.pattern_list.append(self._big_pattern(self.train_data[:, i]))
+        self.test_str_list = [0 for i in range(self.row_number_test)]
+        self.test_repair_data = copy.deepcopy(self.test_data)
+        self.train = None
 
     # get the test data, then split it into phrases , return the result
     def get_test_str_list(self):
         for i in range(self.row_number_test):
-            temp_str = " ".join([str(item) for item in self.test_data[i, :]])
-            self.test_str_list.append(self.segment.segment(unicode(temp_str)))
+            temp_str = " ".join([unicode(item) for item in self.test_data[i, :]])
+            self.test_str_list[i] = self.segment.segment(unicode(temp_str))
 
-    def get_dic(self, one, two, three):
-        dic = {}
-        for i in range(self.row_number_training):
-            key1 = unicode(self.train_data[i][one]) + "," + unicode(self.train_data[i][two]) + ","
-            key2 = unicode(self.train_data[i][two]) + "," + unicode(self.train_data[i][one]) + ","
-            DictHelper.append_dic_key(dic, key1, self.train_data[i][three])
-            DictHelper.append_dic_key(dic, key2, self.train_data[i][three])
-        return dic
-
-    def get_two_to_one_dic(self):
-        self.AB_to_C = self.get_dic(0, 1, 2)
-        self.AC_to_B = self.get_dic(0, 2, 1)
-        self.BC_to_A = self.get_dic(1, 2, 0)
+    def training(self, save_result=True, save_file="pattern_relationship.dat", recover_file=None):
+        if self.train is not None:
+            return
+        if recover_file is not None:
+            self.train = PatternCorrelationHelper.build_from_file(recover_file)
+            return
+        self.train = PatternCorrelationHelper(self.excel_name_training)
+        self.train.build_big_pattern()
+        self.train.build_pattern_relationship()
+        if save_result:
+            self.train.save(save_file)
 
     def recover(self):
-        print "recovering now, please wait ..."
-        start = time.clock()
-        train = PatternCorrelationHelper("Input/train.xls")
-        self.correlation = train.patter_correlation()
-        elapsed = (time.clock() - start)
-        print("Time5555 used:", elapsed)
+        for i in range(self.row_number_test):
+            self.recover_row(i)
 
-        # print self.correlation[1][2][0]
-        # combine all the keys in the same row of self.correlation, prepare for find_pattern
-        self.pattern_key = [[] for i in range(self.column_number_training)]  # record the whole keys for one column
-        keys = []
-        for i in range(self.column_number_training):
-            for k in range(len(self.correlation[i])):
-                # print self.correlation[i][k]
-                if self.correlation[i][k] != []:
-                    keys = list(set(keys + self.correlation[i][k][0].keys()))
+    def recover_row(self, row):
+        recover_list = [[] for i in range(self.column_number_test)]
+        big_pattern_dict = {text: PatternHelper.find_first_word_length(text) for text in self.test_str_list[row]}
+        small_pattern_list = [[] for i in range(self.column_number_test)]
 
-            self.pattern_key[i] = keys
-            keys = []
+        # step 1. Get all element for match big pattern
+        for i in range(self.column_number_test):
+            for key, value in big_pattern_dict.items():
+                if self.train.match_big_pattern(value, i):
+                    recover_list[i].append(key)
 
-        self.recover_data = [([""] * self.column_number_training) for i in range(len(self.test_str_list))]
-        strtemp = ""
-        dic_item_to_column = {}  # recored the row number of the column
-        dic_column_to_item = {}
-        flag = [False] * self.column_number_training
-        # for i in range(len(self.test_str_list)):
-        #     print self.test_str_list[i]
+        # step 2. Check for candidate more than one
+        # for only one candidate cell can be a judge vote for other cell
+        # for zero candidate cell, will ignore
+        while True:
+            old_recover_list = copy.deepcopy(recover_list)
 
+            # update judge small pattern
+            for column in range(self.column_number_test):
+                if len(recover_list[column]) == 1 and len(small_pattern_list[column]) == 0:
+                    small_pattern_list[column] = self.train.get_small_pattern(recover_list[column][0], column)
 
-        for i in range(len(self.test_str_list)):
-            # print "test_str_list[i] = {0}".format(self.test_str_list[i])
-            for item in self.test_str_list[i]:
-                if not item:
-                    continue
-                else:
-                    strtemp = PatternHelper.find_first_word_length(str(item))
-                    for k in range(len(self.pattern_list)):
-                        if self.pattern_list[k][0] != None and strtemp >= self.pattern_list[k][0] and strtemp <= \
-                                self.pattern_list[k][1]:
-                            if item in self.train_data[:, k]:
-                                # give the value to dic_colum_to_item, and dic_item_to_column
-                                if k not in dic_column_to_item.keys():
-                                    dic_column_to_item[k] = [item]
-                                elif item not in dic_column_to_item[k]:
-                                    dic_column_to_item[k].append(item)
-
-                                if item not in dic_item_to_column.keys():
-                                    dic_item_to_column[item] = [k]
-                                elif k not in dic_item_to_column[item]:
-                                    dic_item_to_column[item].append(k)
-                                    # print dic_column_to_item
-                                    # print dic_item_to_column
-
-            # now control dic_column_to_item and dic_item_to_colunm
-            for key1 in dic_item_to_column:
-                for key2 in dic_column_to_item:
-                    if len(dic_item_to_column[key1]) == 1 and len(dic_column_to_item[key2]) == 1 and \
-                                    dic_item_to_column[key1][0] == key2 and dic_column_to_item[key2][
-                        0] == key1:  # 1 column to 1 item
-                        # print "key1 = {0}, key2 = {1}".format(key1,key2)
-                        self.recover_data[i][key2] = key1
-                        flag[key2] = True
-
-            # find by pattern-correlation
-            temppattern = [[] for t in range(len(flag))]
-            pattern_list = [[] for t in range(len(flag))]
-            for ii in range(len(flag)):
-                if ii in dic_column_to_item.keys():
-                    pattern_list[ii] = self.find_pattern(self, dic_column_to_item[ii], self.pattern_key[ii])
-            # print pattern_list
-            # cmpare each two pattern, if mathes, find it in the training data
-
-            for ii in range(len(flag)):
-                for jj in range(len(flag)):
-                    if ii == jj:
+            # vote for 2 more candidate
+            for column in range(self.column_number_test):
+                if len(recover_list[column]) > 1:
+                    score_dict = self.score_column_candidate(column, recover_list, small_pattern_list)
+                    if len(score_dict) == 0:
                         continue
-                    else:
-                        pattern1 = pattern_list[ii]
-                        pattern2 = pattern_list[jj]
+                    max_score = max(score_dict.values())
+                    recover_list[column] = []
+                    for candidate, score in score_dict.items():
+                        if score == max_score:
+                            recover_list[column].append(candidate)
 
-                        for p1 in range(len(pattern1)):
-                            for pp1 in range(len(pattern1[p1])):
-                                if self.correlation[ii][jj] != [] and pattern1[p1][pp1] in self.correlation[ii][jj][
-                                    0].keys():
-                                    for p2 in range(len(pattern2)):
-                                        for pp2 in range(len(pattern2[p2])):
-                                            # print pattern1[p1][pp1]
-                                            # print self.correlation[ii][jj][0][pattern1[p1][pp1]]
-                                            if pattern2[p2][pp2] in self.correlation[ii][jj][0][pattern1[p1][pp1]]:
-                                                # print pattern1[p1][pp1], pattern2[p2][pp2]
-                                                if Step1.search(self, ii, jj, dic_column_to_item[ii][p1],
-                                                                dic_column_to_item[jj][p2]) == True:
-                                                    self.recover_data[i][ii] = dic_column_to_item[ii][p1]
-                                                    self.recover_data[i][jj] = dic_column_to_item[jj][p2]
-                                                    flag[ii] = True
-                                                    flag[jj] = True
-            # # fill in the blank cells
-            if flag.count(False) == 1:
-                index = flag.index(False)
-                temp_key = ""
-                for flag_index in range(len(flag)):
-                    if flag[flag_index] == True:
-                        temp_key += unicode(self.recover_data[i][flag_index]) + ","
-                if temp_key in self.AB_to_C.keys():
-                    value = self.AB_to_C[temp_key]
-                if temp_key in self.AC_to_B.keys():
-                    value = self.AC_to_B[temp_key]
-                if temp_key in self.BC_to_A.keys():
-                    value = self.BC_to_A[temp_key]
-                self.recover_data[i][index] = value
+            # break for no further change
+            if old_recover_list == recover_list:
+                break
 
-            dic_item_to_column = {}
-            dic_column_to_item = {}
-            flag = [False] * self.column_number_training
+        # step 3. recover data
+        for column in range(self.column_number_test):
+            if len(recover_list[column]) == 1:
+                self.test_repair_data[row][column] = recover_list[column][0]
 
-        return self.recover_data
-
-    # find pre and end pattern for the candidate
-    @staticmethod
-    def find_pattern(self, list, keys):
-        pattern_list = [[] for i in range(len(list))]
-        pattern_list_dic = {}
-        # print pattern_list
-        # keys = correlation_dic.keys()  # find all the keys for this column
-        for i in range(len(list)):
-            for key in keys:
-                tempkey = key.split('_')
-                pattern_temp = ""
-                if tempkey[0] == 'P':
-                    pattern_temp = PatternHelper.find_pre_common_str(tempkey[1], list[i])
-                    if pattern_temp:
-                        pattern_list[i].append(unicode('P_' + pattern_temp))
-                elif tempkey[0] == 'E':
-                    pattern_temp = PatternHelper.find_end_common_str(tempkey[1], list[i])
-                    if pattern_temp:
-                        pattern_list[i].append(unicode('E_' + pattern_temp))
-        # print pattern_list
-        return pattern_list
-
-    @staticmethod
-    def search(self, i, j, str1, str2):
-        for k in range(self.row_number_training):
-            if self.train_data[k][i] == str1 and self.train_data[k][j] == str2:
-                return True
-        return False
+    def score_column_candidate(self, column, recover_list, small_pattern_list):
+        score_dict = {}
+        for candidate in recover_list[column]:
+            candidate_small_pattern = self.train.get_small_pattern(candidate, column)
+            for j in range(self.column_number_test):
+                if len(recover_list[j]) == 1 and self.train.vote_for_column(column, candidate_small_pattern, j, small_pattern_list[j]):  # can be a judge
+                    DictHelper.increase_dic_key(score_dict, candidate)
+        return score_dict
 
 
 # training data need to be xls
 if __name__ == '__main__':
     start = time.clock()
     # step 1. Init Step class
-    step = Step1("Input/train.xls", "Input/test1.xls", "zh.dic")
+    step = Step1("Input1/train.xls", "Input1/test1.xls", "zh.dic")
     elapsed = (time.clock() - start)
     print("Time1 used:", elapsed)
     start = time.clock()
     # step 2. General words dic from train.xls
-    step.segment.generate_user_dict("Input/train.xls", "zh.dic")
+    step.segment.generate_user_dict("Input1/train.xls", "zh.dic")
     elapsed = (time.clock() - start)
     print("Time2 used:", elapsed)
     start = time.clock()
-    # step 3. Find big pattern
-    step.find_big_pattern()
-    elapsed = (time.clock() - start)
-    print("Time3 used:", elapsed)
-    start = time.clock()
 
-    # step 4. split test into phrase
+    # step 3. split test into phrase
     step.get_test_str_list()
     elapsed = (time.clock() - start)
-    print("Time4 used:", elapsed)
+    print("Time3 used:", elapsed)
+
+    # step 4. Generic pattern relationship
     start = time.clock()
-    step.get_two_to_one_dic()
+    step.training(recover_file="pattern_relationship.dat")
+    print("Time4 used:", (time.clock() - start))
+
+    # step 5. Recover
+    start = time.clock()
+    step.recover()
     elapsed = (time.clock() - start)
     print("Time5 used:", elapsed)
+
+    # step 6. write to excel
     start = time.clock()
-    data = step.recover()
-    elapsed = (time.clock() - start)
-    print("Time6 used:", elapsed)
-    start = time.clock()
-    ExcelHelper.write_excel("Output/reover1.xlsx", data, "sheet1", step.header_training)
+    ExcelHelper.write_excel("Output/reover1.xls", step.test_repair_data, "sheet1", step.header_training)
     elapsed = (time.clock() - start)
     print("Time7 used:", elapsed)
