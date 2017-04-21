@@ -61,7 +61,7 @@ class PatternCorrelationHelper(object):
             for column in range(self.column_number):
                 self.cell_pre_patterns[row][column] = list(set(self.cell_pre_patterns[row][column])
                                                            .intersection(self.column_pre_patterns[column]))
-                self.cell_end_patterns[row][column] = list(set(self.cell_pre_patterns[row][column])
+                self.cell_end_patterns[row][column] = list(set(self.cell_end_patterns[row][column])
                                                            .intersection(self.column_end_patterns[column]))
 
         # step 2. Find relationship between two column

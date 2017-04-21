@@ -25,9 +25,9 @@ class Step1(object):
 
     # get the test data, then split it into phrases , return the result
     def get_test_str_list(self):
-        for i in range(self.row_number_test):
-            temp_str = " ".join([unicode(item) for item in self.test_data[i, :]])
-            self.test_str_list[i] = self.segment.segment(unicode(temp_str))
+        for row in range(self.row_number_test):
+            temp_str = " ".join([unicode(item) for item in self.test_data[row, :]])
+            self.test_str_list[row] = self.segment.segment(unicode(temp_str))
 
     def training(self, save_result=True, save_file="pattern_relationship.dat", recover_file=None):
         if self.train is not None:
@@ -42,12 +42,15 @@ class Step1(object):
             self.train.save(save_file)
 
     def recover(self):
-        for i in range(self.row_number_test):
-            self.recover_row(i)
+        for row in range(self.row_number_test):
+            self.recover_row(row)
 
     def recover_row(self, row):
+        # store all candidate for each column
         recover_list = [[] for i in range(self.column_number_test)]
+        # Store relationship { segmented text --> big pattern }
         big_pattern_dict = {text: PatternHelper.find_first_word_length(text) for text in self.test_str_list[row]}
+        # store judge's small pattern (judge is the one only one candidate in a excel cell)
         small_pattern_list = [[] for i in range(self.column_number_test)]
 
         # step 1. Get all element for match big pattern
@@ -86,6 +89,7 @@ class Step1(object):
         # step 3. recover data
         for column in range(self.column_number_test):
             if len(recover_list[column]) == 1:
+                print (row, column, self.test_data[row][column], self.test_repair_data[row][column], recover_list[column][0])
                 self.test_repair_data[row][column] = recover_list[column][0]
 
     def score_column_candidate(self, column, recover_list, small_pattern_list):
@@ -93,7 +97,8 @@ class Step1(object):
         for candidate in recover_list[column]:
             candidate_small_pattern = self.train.get_small_pattern(candidate, column)
             for j in range(self.column_number_test):
-                if len(recover_list[j]) == 1 and self.train.vote_for_column(column, candidate_small_pattern, j, small_pattern_list[j]):  # can be a judge
+                if len(recover_list[j]) == 1 and self.train.vote_for_column(column, candidate_small_pattern, j,
+                                                                            small_pattern_list[j]):  # can be a judge
                     DictHelper.increase_dic_key(score_dict, candidate)
         return score_dict
 
@@ -119,7 +124,8 @@ if __name__ == '__main__':
 
     # step 4. Generic pattern relationship
     start = time.clock()
-    step.training(recover_file="pattern_relationship.dat")
+    # step.training(recover_file="pattern_relationship.dat")
+    step.training()
     print("Time4 used:", (time.clock() - start))
 
     # step 5. Recover
@@ -132,4 +138,4 @@ if __name__ == '__main__':
     start = time.clock()
     ExcelHelper.write_excel("Output/reover1.xls", step.test_repair_data, "sheet1", step.header_training)
     elapsed = (time.clock() - start)
-    print("Time7 used:", elapsed)
+    print("Time6 used:", elapsed)
