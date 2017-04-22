@@ -50,7 +50,6 @@ class SegmentHelper(object):
     def _segment_phrase(text, probability_dic, rate):
         text = unicode(text)
         result = SegmentHelper._segment_text(text)
-        print (text, result)
         result.append('')
         phrases = []
         phrase = ''

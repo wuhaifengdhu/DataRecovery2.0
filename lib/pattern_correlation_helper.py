@@ -116,6 +116,8 @@ class PatternCorrelationHelper(object):
         start = time.clock()
         self.find_pattern_correlation()
         print ("correlation : {0}".format(time.clock() - start))
+        print ("self.pre_pattern_relation=", self.pre_pattern_relation)
+        print ("self.end_pattern_relation=", self.end_pattern_relation)
 
     def save(self, file_name="pattern_relationship.dat"):
         StoreHelper.store_data(self, file_name)
@@ -125,16 +127,18 @@ class PatternCorrelationHelper(object):
         return StoreHelper.load_data(file_name)
 
     @staticmethod
-    def _big_pattern(data_list):
+    def _big_pattern(data_list, pattern_mode):
         big_pattern = set()
         for item in data_list:
-            _pattern = PatternHelper.find_first_word_length(item)
+            _pattern = pattern_mode(item)
             if _pattern is not None:
                 big_pattern.add(_pattern)
         big_pattern = list(big_pattern)
         min_key = min(big_pattern)
         max_key = max(big_pattern)
-        if min_key[0] != max_key[0]:
+        print ("min_key=%i" % min_key)
+        print ("max_key=%i" % max_key)
+        if min_key / 1000000 != max_key / 1000000:
             return None
         else:
             return [min_key, max_key]
@@ -142,14 +146,20 @@ class PatternCorrelationHelper(object):
     # find the big pattern that suits each item in the column, I choose the length of the first word
     def build_big_pattern(self):
         for i in range(self.column_number):
-            self.column_big_pattern[i] = self._big_pattern(self.raw_data[:, i])
+            self.column_big_pattern[i] = (self._big_pattern(self.raw_data[:, i], PatternHelper.find_first_word_length),
+                                          self._big_pattern(self.raw_data[:, i], PatternHelper.find_last_word_length))
+        print ("big pattern = ", self.column_big_pattern)
 
     def match_big_pattern(self, pattern, column):
-        if self.column_big_pattern[column] is not None:
-            min_pattern, max_pattern = self.column_big_pattern[column]
-            if min_pattern < pattern < max_pattern:
-                return True
-        return False
+        if self.column_big_pattern[column][0] is not None:
+            first_pattern = self.column_big_pattern[column][0]
+            if not first_pattern[0] < pattern[0] < first_pattern[1]:
+                return False
+        if self.column_big_pattern[column][1] is not None:
+            last_pattern = self.column_big_pattern[column][0]
+            if not last_pattern[0] < pattern[1] < last_pattern[1]:
+                return False
+        return True
 
     def get_small_pattern(self, content, column):
         max_length_pre_candidate = ""

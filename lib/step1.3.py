@@ -49,7 +49,8 @@ class Step1(object):
         # store all candidate for each column
         recover_list = [[] for i in range(self.column_number_test)]
         # Store relationship { segmented text --> big pattern }
-        big_pattern_dict = {text: PatternHelper.find_first_word_length(text) for text in self.test_str_list[row]}
+        big_pattern_dict = {text: (PatternHelper.find_first_word_length(text), PatternHelper.find_last_word_length(text)
+                                   ) for text in self.test_str_list[row]}
         # store judge's small pattern (judge is the one only one candidate in a excel cell)
         small_pattern_list = [[] for i in range(self.column_number_test)]
 
@@ -58,6 +59,7 @@ class Step1(object):
             for key, value in big_pattern_dict.items():
                 if self.train.match_big_pattern(value, i):
                     recover_list[i].append(key)
+
 
         # step 2. Check for candidate more than one
         # for only one candidate cell can be a judge vote for other cell
@@ -68,29 +70,26 @@ class Step1(object):
             # update judge small pattern
             for column in range(self.column_number_test):
                 if len(recover_list[column]) == 1 and len(small_pattern_list[column]) == 0:
-                    small_pattern_list[column] = self.train.get_small_pattern(recover_list[column][0], column)
+                    Step1.column_choose_decided(recover_list, column)
 
             # vote for 2 more candidate
-            for column in range(self.column_number_test):
-                if len(recover_list[column]) > 1:
-                    score_dict = self.score_column_candidate(column, recover_list, small_pattern_list)
-                    if len(score_dict) == 0:
-                        continue
-                    max_score = max(score_dict.values())
-                    recover_list[column] = []
-                    for candidate, score in score_dict.items():
-                        if score == max_score:
-                            recover_list[column].append(candidate)
+            # for column in range(self.column_number_test):
+            #     if len(recover_list[column]) > 1:
+            #         score_dict = self.score_column_candidate(column, recover_list, small_pattern_list)
+            #         if len(score_dict) == 0:
+            #             continue
+            #         max_score = max(score_dict.values())
+            #         recover_list[column] = []
+            #         for candidate, score in score_dict.items():
+            #             if score == max_score:
+            #                 recover_list[column].append(candidate)
 
             # break for no further change
             if old_recover_list == recover_list:
                 break
-
         # step 3. recover data
         for column in range(self.column_number_test):
-            if len(recover_list[column]) == 1:
-                print (row, column, self.test_data[row][column], self.test_repair_data[row][column], recover_list[column][0])
-                self.test_repair_data[row][column] = recover_list[column][0]
+            self.test_repair_data[row][column] = recover_list[column][0] if len(recover_list[column]) > 0 else ''
 
     def score_column_candidate(self, column, recover_list, small_pattern_list):
         score_dict = {}
@@ -101,6 +100,12 @@ class Step1(object):
                                                                             small_pattern_list[j]):  # can be a judge
                     DictHelper.increase_dic_key(score_dict, candidate)
         return score_dict
+
+    @staticmethod
+    def column_choose_decided(recover_list, column):
+        for i in range(len(recover_list)):
+            if i != column and recover_list[column][0] in recover_list[i] and len(recover_list[i]) > 1:
+                recover_list[i].remove(recover_list[column][0])
 
 
 # training data need to be xls

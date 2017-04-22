@@ -27,10 +27,25 @@ class PatternHelper(object):
             return None
         else:
             str_list = unicode(item).split()
-            return 'N'+str(len(str_list[0])) if PatternHelper.is_number(str_list[0]) else 'S' + str(len(str_list[0]))
+            # convert N to 2000000, S to 5000000
+            return 2000000 + len(str_list[0]) if PatternHelper.is_number(str_list[0]) else 5000000 + len(str_list[0])
+
+    @staticmethod
+    def find_last_word_length(item):
+        if not item:
+            return None
+        else:
+            str_list = unicode(item).split()
+            # convert N to 2000000, S to 5000000
+            return 2000000 + len(str_list[-1]) if PatternHelper.is_number(str_list[-1]) else 5000000 + len(str_list[0])
 
     @staticmethod
     def is_number(s):
+        if type(s) is not unicode:
+            print type(s)
+            s = str(s).strip()
+        if s[-1] == '%':
+            s = s[:-1]
         try:
             float(s)
             return True
